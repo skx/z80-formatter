@@ -19,12 +19,15 @@ To format some files run:
 This has only been tested on some code that I wrote, and the source code to
 the [Z80 playground](https://github.com/skx/z80-playground-cpm-fat) system.
 
-There is one bug at the moment, that the following line of code is mishandled:
 
-    cp ';'
 
-This is parsed as a comment, rather than a character-literal.  I'll fix that
-soon.
+## Testing
+
+There is a simple `Makefile` contained within the repository, which is used for a regression/sanity-test.
+
+* Every file matching the glob `*.in` is formatted to a temporary file.
+* The output is compared to `*.expected`, and if there is a mismatch the test fails.
+
 
 
 Steve
