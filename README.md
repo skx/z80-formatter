@@ -1,10 +1,17 @@
 # z80-formatter
 
-This repository contains a simple perl-script which is designed to pretty-print,
-or format, Z80 assembly source files in a consistent fashion.
+This repository contains a simple, zero-dependency, Perl script which is designed to pretty-print, or format, Z80 assembly source files in a consistent fashion.
 
-There are no options to tweak, so if the look and feel isn't what you prefer
-then you're out of luck.
+There are no options to tweak, so if the look and feel isn't what you prefer then you're out of luck.
+
+
+
+## Usage
+
+To format some files run:
+
+    $ z80-formatter [--in-place] path/to/file.z80 path/to/file2.z80  ..
+
 
 
 ## Limitations
