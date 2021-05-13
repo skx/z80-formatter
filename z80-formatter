@@ -1,0 +1,253 @@
+#!/usr/bin/perl -w
+#
+# Format the named file(s), appropriately.
+#
+# This is a quick hack
+#
+
+use strict;
+use warnings;
+
+use Getopt::Long;
+
+
+#
+# Instructions we recognize as being valid.
+#
+my @valid = ( "aci",  "adc",  "add",  "and",  "adi",  "ani",  "bit",  "ccf",
+              "call", "cmc",  "cmp",  "cnz",  "cp",   "cpi",  "cpir", "cpl",
+              "cz",   "daa",  "dad",  "dcr",  "dcx",  "dec",  "di",   "djnz",
+              "ei",   "ex",   "exx",  "halt", "im",   "in",   "inc",  "ind",
+              "indr", "ini",  "inir", "inr",  "inx",  "jc",   "jm",   "jmp",
+              "jnc",  "jnz",  "jp",   "jr",   "jz",   "ld",   "lda",  "ldax",
+              "ldd",  "lddr", "ldi",  "ldir", "lhld", "lxi",  "mov",  "mvi",
+              "neg",  "nop",  "or",   "ora",  "otdr", "otir", "out",  "outd",
+              "outi", "pop",  "push", "rar",  "rc",   "res",  "ret",  "reti",
+              "retn", "rl",   "rla",  "rlc",  "rlca", "rld",  "rnc",  "rnz",
+              "rr",   "rra",  "rrc",  "rrca", "rrd",  "rst",  "rz",   "sbb",
+              "sbc",  "sbi",  "scf",  "set",  "shld", "sla",  "sphl", "sra",
+              "srl",  "sta",  "stax", "stc",  "sub",  "sui",  "xchg", "xor",
+              "xra",  "xthl",
+            );
+
+#
+# Operations we allow as pseudo-instructions
+#
+my @operations = ( "dwa", "db",    "defb", "ds", "dw", "defw",
+                   "end", "endif", "endm", "tb", "if", "include",
+                   "org", ".warning"
+                 );
+
+
+#
+# Are we replacing in-place?
+#
+my $inPlace;
+GetOptions( "in-place" => \$inPlace ) or
+  die("Error in command line arguments\n");
+
+#
+#
+# Did we not get arguments?
+#
+if ( $#ARGV < 0 )
+{
+    print "Usage: $0 [--in-place] file1 .. fileN\n";
+    exit 1;
+}
+
+#
+# OK process each file
+#
+while ( my $file = shift )
+{
+    #
+    # Are we replacing in-place?
+    #
+    my $out = "-";
+    if ($inPlace)
+    {
+        $out = $file . ".new";
+    }
+    open( my $fh, ">", $out ) or
+      die "Failed to open output file $!";
+
+    formatFile( $file, $fh );
+
+    #
+    # OK if we got here we finished with no errors
+    #
+    close($fh);
+    if ($inPlace)
+    {
+        # Replace the .new file with the original
+        rename( $file,          $file . ".old" );
+        rename( $file . ".new", $file );
+    }
+}
+
+#
+# All done
+#
+exit 0;
+
+
+
+#
+# Process the given file
+#
+sub formatFile
+{
+    my ( $name, $fh ) = (@_);
+
+    open( my $handle, "<", $name ) or
+      die "Failed to open $name - $!";
+
+    while ( my $line = <$handle> )
+    {
+        # Save a copy of the input-line for the case of errors.
+        my $orig = $line;
+
+        # Remove newlines and carridge-returns
+        $line =~ s/[\r\n]//g;
+
+        # Trim leading/trailing whitespace.
+        $line =~ s/^\s+|\s+$//g;
+
+        # Skip empty lines
+        if ( $line =~ /^$/ )
+        {
+            print $fh "\n";
+            next;
+        }
+
+
+        # label
+        if ( $line =~ /^\s*([a-zA-Z0-9_-]+):(.*)$/ )
+        {
+            print $fh "$1:\t$2\n";
+            next;
+        }
+
+        # Comments?
+        if ( $line =~ /^\s*;+(.*)$/ )
+        {
+            my $comment = $1;
+            $comment =~ s/^\s+|\s+$//g;
+
+            print $fh "; " . $comment . "\n";
+            next;
+        }
+
+        #
+        # OK this is probably an instruction.
+        #
+        # Get the instruction
+        #
+        if ( $line =~ /^\s*([\.a-zA-Z]+)(.*)$/ )
+        {
+            # Get the instruction
+            my $ins = lc($1);
+
+            # strip any comment
+            my $comment = "";
+            if ( $line =~ /^(.*);+(.*)$/ )
+            {
+                $line    = $1;
+                $comment = $2;
+
+                # Trim leading/trailing whitespace.
+                $line =~ s/^\s+|\s+$//g;
+                $comment =~ s/^\s+|\s+$//g;
+            }
+
+            # Does the instruction exist?
+            my $valid = 0;
+            my @all = ( @valid, @operations );
+            foreach my $v (@all)
+            {
+                if ( $ins eq $v )
+                {
+                    $valid = 1;
+                }
+            }
+
+            #
+            # Invalid/Unknown instruction.
+            #
+            if ( !$valid )
+            {
+                #
+                # EQU is an easy one.
+                #
+                if ( $line =~ /EQU/i )
+                {
+                    my $out = "$line";
+                    if ($comment)
+                    {
+                        while ( length($out) < 20 )
+                        {
+                            $out .= " ";
+                        }
+
+                        $out .= "; ";
+                        $out .= $comment;
+                    }
+
+                    $out .= "\n";
+                    print $fh $out;
+                    next;
+                }
+
+                #
+                # Otherwise we terminate here.
+                #
+                print "Invalid instruction in $name: $ins\n";
+                print "Line: $orig\n";
+                exit(1);
+            }
+
+            # OK we have an instruction, and a comment
+            #
+            # This might include something like this:
+            #
+            #   nop    ; Blah
+            #   ld a, b ; blah
+            #   djnz foo ; blah
+            #   jr nc label ; blah
+            #
+            # 1. Collapse multiple spaces into one
+            #
+            # 2. Ensure commas look like "ld a, b", so only a single
+            #    space afterwards.
+            #
+            $line =~ s/ +/ /;
+            $line =~ s/ *, */, /g;
+
+            my $out = "\t$line";
+
+            if ($comment)
+            {
+                while ( length($out) < 20 )
+                {
+                    $out .= " ";
+                }
+
+                $out .= "; ";
+                $out .= $comment;
+            }
+
+            $out .= "\n";
+
+            print $fh $out;
+
+        }
+        else
+        {
+            print "No match in $name: '$line'\n";
+            exit(1);
+        }
+    }
+
+    close($handle);
+}
